@@ -15,6 +15,8 @@ def _get_init_fn(FLAGS):
 
     Returns:
       An init function run by the supervisor.
+
+      初始化vgg（或者其他分类网络模型）的参数，为了加快初始化，排除了全连接层
     """
     tf.logging.info('Use pretrained model %s' % FLAGS.loss_model_file)
 

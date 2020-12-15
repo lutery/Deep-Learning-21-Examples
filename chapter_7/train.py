@@ -32,21 +32,34 @@ def main(FLAGS):
     with tf.Graph().as_default():
         with tf.Session() as sess:
             """Build Network"""
+            # 构建损失函数
             network_fn = nets_factory.get_network_fn(
                 FLAGS.loss_model,
                 num_classes=1,
                 is_training=False)
 
+            # 作用暂时不明，好像是有关于图像预处理功能
+            # image_preprocessing_fn: 目前已知对输入图像进行尺寸统一（包含reshape以及crop两个操作），将像素值进行归一化处理
+            # image_preunprocessing_fn: 将归一化的图像转换为正常像素的图片，但是无法进行尺寸恢复
             image_preprocessing_fn, image_unprocessing_fn = preprocessing_factory.get_preprocessing(
                 FLAGS.loss_model,
                 is_training=False)
+
+            # 加载训练数据集
             processed_images = reader.image(FLAGS.batch_size, FLAGS.image_size, FLAGS.image_size,
                                             'train2014/', image_preprocessing_fn, epochs=FLAGS.epoch)
+
+            # 风格转换模型，这个就是需要训练的网络
             generated = model.net(processed_images, training=True)
+            # 对完成风格转换的图片的每张图片从batch中分离出来，逐个调用
+            # image_preprocessing_fn进行预处理 再次对图像进行归一化处理
+            # 处理完成后又重新合并成一个batch
             processed_generated = [image_preprocessing_fn(image, FLAGS.image_size, FLAGS.image_size)
                                    for image in tf.unstack(generated, axis=0, num=FLAGS.batch_size)
                                    ]
             processed_generated = tf.stack(processed_generated)
+
+            # 这个步骤估计就是调用loss函数和计算损失，todo 了解具体怎么计算 返回值是什么
             _, endpoints_dict = network_fn(tf.concat([processed_generated, processed_images], 0), spatial_squeeze=False)
 
             # Log the structure of loss network
@@ -55,8 +68,10 @@ def main(FLAGS):
                 tf.logging.info(key)
 
             """Build Losses"""
+            # 构建损失静态图
             content_loss = losses.content_loss(endpoints_dict, FLAGS.content_layers)
             style_loss, style_loss_summary = losses.style_loss(endpoints_dict, style_features_t, FLAGS.style_layers)
+            # todo 这个损失是什么意思？初步预计，这个损失是指风格转换过程中的损失值
             tv_loss = losses.total_variation_loss(generated)  # use the unprocessed image
 
             loss = FLAGS.style_weight * style_loss + FLAGS.content_weight * content_loss + FLAGS.tv_weight * tv_loss
@@ -85,12 +100,14 @@ def main(FLAGS):
             """Prepare to Train"""
             global_step = tf.Variable(0, name="global_step", trainable=False)
 
+            # 这里的训练将只训练非vgg网络的可训练变量
             variable_to_train = []
             for variable in tf.trainable_variables():
                 if not(variable.name.startswith(FLAGS.loss_model)):
                     variable_to_train.append(variable)
             train_op = tf.train.AdamOptimizer(1e-3).minimize(loss, global_step=global_step, var_list=variable_to_train)
 
+            # 用于训练变量的保存和读取
             variables_to_restore = []
             for v in tf.global_variables():
                 if not(v.name.startswith(FLAGS.loss_model)):
