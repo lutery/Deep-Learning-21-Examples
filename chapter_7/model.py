@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 
 def conv2d(x, input_filters, output_filters, kernel, strides, mode='REFLECT'):
@@ -6,7 +7,7 @@ def conv2d(x, input_filters, output_filters, kernel, strides, mode='REFLECT'):
 
         shape = [kernel, kernel, input_filters, output_filters]
         weight = tf.Variable(tf.truncated_normal(shape, stddev=0.1), name='weight')
-        x_padded = tf.pad(x, [[0, 0], [kernel / 2, kernel / 2], [kernel / 2, kernel / 2], [0, 0]], mode=mode)
+        x_padded = tf.pad(x, [[0, 0], [np.int(kernel / 2), np.int(kernel / 2)], [np.int(kernel / 2), np.int(kernel / 2)], [0, 0]], mode=mode)
         return tf.nn.conv2d(x_padded, weight, strides=[1, strides, strides, 1], padding='VALID', name='conv')
 
 
